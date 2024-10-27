@@ -1,56 +1,101 @@
-#
 provider "aws" {
   region = "ap-southeast-1"
 }
 
-#tfsec:ignore:aws-s3-enable-bucket-logging
-resource "aws_s3_bucket" "example" {
-  bucket = "my-tf-example-bucket-7611"
-}
-
-resource "aws_s3_bucket_ownership_controls" "example" {
-  bucket = aws_s3_bucket.example.id
-  rule {
-    object_ownership = "BucketOwnerPreferred"
+# Create default VPC if one does not exist
+resource "aws_default_vpc" "default_vpc" {
+  tags = {
+    Name = "default-vpc"
   }
 }
 
-resource "aws_s3_bucket_acl" "example" {
-  depends_on = [aws_s3_bucket_ownership_controls.example]
+# Data source to get all availability zones in the region
+data "aws_availability_zones" "available_zones" {}
 
-  bucket = aws_s3_bucket.example.id
-  acl    = "private"
-}
+# Create default subnet in the first availability zone if one does not exist
+resource "aws_default_subnet" "default_az1" {
+  availability_zone = data.aws_availability_zones.available_zones.names[0]
 
-resource "aws_s3_bucket_public_access_block" "example" {
-  bucket = aws_s3_bucket.example.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_versioning" "versioning_example" {
-  bucket = aws_s3_bucket.example.id
-  versioning_configuration {
-    status = "Enabled"
+  tags = {
+    Name = "default-subnet"
   }
 }
 
-resource "aws_kms_key" "mykey" {
-  description             = "This key is used to encrypt bucket objects"
-  enable_key_rotation     = true
-  deletion_window_in_days = 7
+# Create security group for the EC2 instance
+resource "aws_security_group" "ec2_security_group" {
+  name        = "ec2_security_group"
+  description = "Allow HTTP and restricted SSH access"
+  vpc_id      = aws_default_vpc.default_vpc.id
+
+  # Allow HTTP access to the web server from anywhere
+  # tfsec:ignore:aws-security-group-ingress-0.0.0.0/0
+  ingress {
+    description = "HTTP access"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Allow SSH access from a specific IP
+  ingress {
+    description = "SSH access from specified IP"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["60.54.80.212/32"]  # Replace with your IP if needed
+  }
+
+  # Allow all outbound traffic
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = -1
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "ec2-security-group"
+  }
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "example" {
-  bucket = aws_s3_bucket.example.id
+# Use data source to get a registered Amazon Linux 2 AMI
+data "aws_ami" "amazon_linux_2" {
+  most_recent = true
+  owners      = ["amazon"]
 
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.mykey.arn
-      sse_algorithm     = "aws:kms"
-    }
+  filter {
+    name   = "owner-alias"
+    values = ["amazon"]
   }
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm*"]
+  }
+}
+
+# Launch the EC2 instance and configure it using user data
+resource "aws_instance" "ec2_instance" {
+  ami                    = data.aws_ami.amazon_linux_2.id
+  instance_type          = "t2.micro"
+  subnet_id              = aws_default_subnet.default_az1.id
+  vpc_security_group_ids = [aws_security_group.ec2_security_group.id]
+  key_name               = "letmein"
+  user_data              = file("setup_apps.sh")
+
+  tags = {
+    Name = "Reveal.JS Apps"
+  }
+}
+
+# Outputs for EC2 instance details
+output "instance_id" {
+  description = "ID of the EC2 instance"
+  value       = aws_instance.ec2_instance.id
+}
+
+output "public_ipv4_address" {
+  description = "EC2 Public IP"
+  value       = aws_instance.ec2_instance.public_ip
 }
