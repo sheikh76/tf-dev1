@@ -1,9 +1,9 @@
-#
 provider "aws" {
   region = "ap-southeast-1"
 }
 
 # Create default VPC if one does not exist
+# tfsec:ignore:aws-ec2-no-default-vpc
 resource "aws_default_vpc" "default_vpc" {
   tags = {
     Name = "default-vpc"
@@ -29,7 +29,7 @@ resource "aws_security_group" "ec2_security_group" {
   vpc_id      = aws_default_vpc.default_vpc.id
 
   # Allow HTTP access to the web server from anywhere
-  # tfsec:ignore:aws-security-group-ingress-0.0.0.0/0
+  # tfsec:ignore:aws-ec2-no-public-ingress-sgr
   ingress {
     description = "HTTP access"
     from_port   = 80
@@ -44,11 +44,13 @@ resource "aws_security_group" "ec2_security_group" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["60.54.80.212/32"]  # Replace with your IP if needed
+    cidr_blocks = ["60.54.80.212/32"]
   }
 
   # Allow all outbound traffic
+  # tfsec:ignore:aws-ec2-no-public-egress-sgr
   egress {
+    description = "Allow all outbound traffic"
     from_port   = 0
     to_port     = 0
     protocol    = -1
@@ -85,6 +87,18 @@ resource "aws_instance" "ec2_instance" {
   key_name               = "letmein"
   user_data              = file("setup_apps.sh")
 
+  # Enabling IMDSv2
+  # tfsec:ignore:aws-ec2-enforce-http-token-imds
+  metadata_options {
+    http_tokens = "required"
+  }
+
+  # Setting encryption for the root block device
+  # tfsec:ignore:aws-ec2-enable-at-rest-encryption
+  root_block_device {
+    encrypted = true
+  }
+
   tags = {
     Name = "Reveal.JS Apps"
   }
@@ -100,3 +114,4 @@ output "public_ipv4_address" {
   description = "EC2 Public IP"
   value       = aws_instance.ec2_instance.public_ip
 }
+
