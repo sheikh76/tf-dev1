@@ -3,6 +3,7 @@ provider "aws" {
 }
 
 # Create default VPC if one does not exist
+# tfsec:ignore:aws-ec2-no-default-vpc
 # tfsec:ignore:aws-ec2-require-vpc-flow-logs-for-all-vpcs
 resource "aws_default_vpc" "default_vpc" {
   tags = {
