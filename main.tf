@@ -45,7 +45,7 @@ resource "aws_security_group" "ec2_security_group" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/32"]
+    cidr_blocks = ["60.54.80.212/32"]
   }
 
   # Allow all outbound traffic
