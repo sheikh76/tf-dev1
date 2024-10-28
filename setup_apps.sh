@@ -10,3 +10,4 @@ cp -r terraform_slide/* /var/www/html/
 rm -rf terraform_slide
 systemctl enable httpd 
 systemctl start httpd
+sudo hostnamectl set-hostname amazonlinux2
