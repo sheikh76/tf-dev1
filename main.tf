@@ -115,5 +115,4 @@ output "public_ipv4_address" {
   description = "EC2 Public IP"
   value       = aws_instance.ec2_instance.public_ip
 }
-#
 
